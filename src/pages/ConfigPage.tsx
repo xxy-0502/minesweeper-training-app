@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-import { difficultyProfiles, durationOptions } from '../data/difficulties'
+import { difficultyProfiles, durationOptions } from '../game/difficulty'
+import { useGameStore } from '../store/gameStore'
 import { useTrainingStore } from '../store/trainingStore'
 import type { Difficulty } from '../types/training'
 
@@ -10,10 +11,13 @@ export function ConfigPage() {
   const setDuration = useTrainingStore((state) => state.setDuration)
   const setDifficulty = useTrainingStore((state) => state.setDifficulty)
   const startTraining = useTrainingStore((state) => state.startTraining)
+  const prepareGame = useGameStore((state) => state.prepareGame)
   const profile = difficultyProfiles[difficulty]
 
   function handleStart() {
+    const startedAt = new Date().toISOString()
     startTraining()
+    prepareGame({ durationMinutes, difficulty }, startedAt)
     navigate('/game')
   }
 

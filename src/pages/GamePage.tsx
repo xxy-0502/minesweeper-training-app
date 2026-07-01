@@ -1,61 +1,118 @@
-import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Board } from '../components/Board'
+import { ResultModal } from '../components/ResultModal'
+import { StatusBar } from '../components/StatusBar'
 import { difficultyProfiles } from '../data/difficulties'
+import { useGameStore } from '../store/gameStore'
 import { useTrainingStore } from '../store/trainingStore'
 
-const previewCells = Array.from({ length: 81 }, (_, index) => index)
-
 export function GamePage() {
-  const durationMinutes = useTrainingStore((state) => state.durationMinutes)
-  const difficulty = useTrainingStore((state) => state.difficulty)
-  const startedAt = useTrainingStore((state) => state.startedAt)
-  const profile = difficultyProfiles[difficulty]
+  const navigate = useNavigate()
+  const trainingDuration = useTrainingStore((state) => state.durationMinutes)
+  const trainingDifficulty = useTrainingStore((state) => state.difficulty)
+  const trainingStartedAt = useTrainingStore((state) => state.startedAt)
+  const board = useGameStore((state) => state.board)
+  const status = useGameStore((state) => state.status)
+  const config = useGameStore((state) => state.config)
+  const remainingSeconds = useGameStore((state) => state.remainingSeconds)
+  const flagCount = useGameStore((state) => state.flagCount)
+  const resultMessage = useGameStore((state) => state.resultMessage)
+  const stats = useGameStore((state) => state.stats)
+  const prepareGame = useGameStore((state) => state.prepareGame)
+  const revealAt = useGameStore((state) => state.revealAt)
+  const toggleFlagAt = useGameStore((state) => state.toggleFlagAt)
+  const restartRound = useGameStore((state) => state.restartRound)
+  const pause = useGameStore((state) => state.pause)
+  const resume = useGameStore((state) => state.resume)
+  const tick = useGameStore((state) => state.tick)
+  const endTraining = useGameStore((state) => state.endTraining)
+  const profile = difficultyProfiles[config.difficulty]
+
+  useEffect(() => {
+    if (!trainingStartedAt) {
+      const startedAt = new Date().toISOString()
+      prepareGame(
+        {
+          durationMinutes: trainingDuration,
+          difficulty: trainingDifficulty,
+        },
+        startedAt,
+      )
+    }
+  }, [prepareGame, trainingDifficulty, trainingDuration, trainingStartedAt])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      tick()
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [tick])
+
+  useEffect(() => {
+    if (status === 'ended') {
+      navigate('/report')
+    }
+  }, [navigate, status])
+
+  const isBoardDisabled = ['paused', 'won', 'lost', 'ended'].includes(status)
 
   return (
     <main className="page game-page">
-      <section className="status-strip" aria-label="训练状态">
-        <div>
-          <span>难度</span>
-          <strong>{profile.label}</strong>
-        </div>
-        <div>
-          <span>训练时间</span>
-          <strong>{durationMinutes} 分钟</strong>
-        </div>
-        <div>
-          <span>剩余雷数</span>
-          <strong>{profile.mines}</strong>
-        </div>
-        <div>
-          <span>开始时间</span>
-          <strong>
-            {startedAt ? new Date(startedAt).toLocaleTimeString() : '未开始'}
-          </strong>
-        </div>
-      </section>
+      <StatusBar
+        difficulty={config.difficulty}
+        durationMinutes={config.durationMinutes}
+        flagCount={flagCount}
+        remainingSeconds={remainingSeconds}
+        score={stats.score}
+        status={status}
+      />
 
-      <section className="board-panel" aria-label="扫雷棋盘预览">
+      <section className="board-panel" aria-label="扫雷棋盘">
         <div className="board-toolbar">
-          <h1>训练棋盘</h1>
+          <div>
+            <h1>训练棋盘</h1>
+            <p>
+              {profile.cols} x {profile.rows}，共 {profile.mines}{' '}
+              个雷。点击翻开，右键或长按插旗。
+            </p>
+          </div>
           <div className="toolbar-actions">
-            <button type="button">暂停</button>
-            <Link className="primary-action small" to="/report">
+            {status === 'paused' ? (
+              <button type="button" onClick={resume}>
+                继续
+              </button>
+            ) : (
+              <button type="button" onClick={pause}>
+                暂停
+              </button>
+            )}
+            <button
+              className="primary-action small"
+              type="button"
+              onClick={endTraining}
+            >
               结束并查看报告
-            </Link>
+            </button>
           </div>
         </div>
-        <div className="board-preview" role="grid" aria-label="9 x 9 棋盘预览">
-          {previewCells.map((cell) => (
-            <button
-              key={cell}
-              className="cell"
-              type="button"
-              aria-label={`格子 ${cell + 1}`}
-            >
-              {cell % 13 === 0 ? '1' : ''}
-            </button>
-          ))}
-        </div>
+        {resultMessage && !['won', 'lost', 'ended'].includes(status) ? (
+          <p className="game-message">{resultMessage}</p>
+        ) : null}
+        <Board
+          board={board}
+          disabled={isBoardDisabled}
+          onFlag={toggleFlagAt}
+          onReveal={revealAt}
+        />
       </section>
+
+      <ResultModal
+        message={resultMessage}
+        status={status}
+        onNextRound={restartRound}
+        onReport={() => navigate('/report')}
+      />
     </main>
   )
 }
