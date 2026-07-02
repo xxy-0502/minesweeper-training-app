@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { InfoModal } from '../components/InfoModal'
 import { difficultyProfiles, durationOptions } from '../game/difficulty'
 import { useGameStore } from '../store/gameStore'
 import { useTrainingStore } from '../store/trainingStore'
@@ -6,6 +8,7 @@ import type { Difficulty } from '../types/training'
 
 export function ConfigPage() {
   const navigate = useNavigate()
+  const [showHelp, setShowHelp] = useState(false)
   const durationMinutes = useTrainingStore((state) => state.durationMinutes)
   const difficulty = useTrainingStore((state) => state.difficulty)
   const setDuration = useTrainingStore((state) => state.setDuration)
@@ -32,9 +35,18 @@ export function ConfigPage() {
             准备流程，完成后生成训练报告。
           </p>
         </div>
-        <button className="primary-action" type="button" onClick={handleStart}>
-          开始训练
-        </button>
+        <div className="toolbar-actions">
+          <button type="button" onClick={() => setShowHelp(true)}>
+            游戏说明
+          </button>
+          <button
+            className="primary-action"
+            type="button"
+            onClick={handleStart}
+          >
+            开始训练
+          </button>
+        </div>
       </section>
 
       <section className="setup-grid" aria-label="训练配置">
@@ -87,6 +99,23 @@ export function ConfigPage() {
           </div>
         </dl>
       </section>
+
+      <InfoModal
+        open={showHelp}
+        title="游戏说明"
+        primaryActionLabel="开始训练"
+        onPrimaryAction={handleStart}
+        onClose={() => setShowHelp(false)}
+      >
+        <ul className="modal-list">
+          <li>左键或轻触格子可以翻开方块。</li>
+          <li>右键或长按未翻开的方块可以插旗或取消插旗。</li>
+          <li>数字表示周围 8 个格子中的地雷数量。</li>
+          <li>翻开空白格时会自动展开相邻安全区域。</li>
+          <li>踩到地雷会判定本局失败，清除全部非雷格会判定胜利。</li>
+          <li>训练结束后会生成包含操作次数、反应时间和图表的报告。</li>
+        </ul>
+      </InfoModal>
     </main>
   )
 }
