@@ -26,6 +26,8 @@ export type GameStats = {
   losses: number
   safeReveals: number
   flagsPlaced: number
+  correctFlags: number
+  wrongFlags: number
   mistakes: number
   totalActions: number
   reactionSamplesMs: number[]

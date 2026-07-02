@@ -5,8 +5,10 @@ import { toggleFlag } from '../game/flag'
 import { revealCell } from '../game/reveal'
 import { calculateScore, createEmptyStats } from '../game/statistics'
 import { hasWon } from '../game/winLoss'
+import { saveLatestReport } from '../utils/reportStorage'
 import type {
   Board,
+  Cell,
   GameSessionConfig,
   GameStats,
   GameStatus,
@@ -25,6 +27,7 @@ type GameState = {
   resultMessage: string
   stats: GameStats
   prepareGame: (config: GameSessionConfig, startedAt?: string) => void
+  beginTraining: () => void
   revealAt: (row: number, col: number) => void
   toggleFlagAt: (row: number, col: number) => void
   restartRound: () => void
@@ -52,7 +55,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   resultMessage: '',
   stats: createEmptyStats(),
 
-  prepareGame: (config, startedAt) => {
+  prepareGame: (config, _startedAt) => {
     set({
       board: createBoardForConfig(config),
       status: 'ready',
@@ -60,11 +63,24 @@ export const useGameStore = create<GameState>((set, get) => ({
       remainingSeconds: config.durationMinutes * 60,
       flagCount: 0,
       minesPlaced: false,
-      sessionStartedAt: startedAt ?? new Date().toISOString(),
+      sessionStartedAt: null,
       sessionEndedAt: null,
       lastActionAt: null,
       resultMessage: '点击任意格开始，本局首次点击不会踩雷。',
       stats: createEmptyStats(),
+    })
+  },
+
+  beginTraining: () => {
+    const state = get()
+    if (state.status !== 'ready' || state.sessionStartedAt) {
+      return
+    }
+
+    set({
+      status: 'playing',
+      sessionStartedAt: new Date().toISOString(),
+      resultMessage: '',
     })
   },
 
@@ -80,6 +96,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       ? state.board
       : placeMines(state.board, profile.mines, { row, col })
     const result = revealCell(baseBoard, row, col)
+    if (result.revealedCount === 0 && !result.hitMine) {
+      return
+    }
+
     const nextStats = recordAction(
       state.stats,
       state,
@@ -198,9 +218,22 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   endTraining: () => {
+    const state = get()
+    const sessionEndedAt = new Date().toISOString()
+    const finalStats = finalizeReportStats(state.stats, state.board)
+    saveLatestReport({
+      trainingName: '扫雷康复训练',
+      durationMinutes: state.config.durationMinutes,
+      difficulty: state.config.difficulty,
+      sessionStartedAt: state.sessionStartedAt,
+      sessionEndedAt,
+      stats: finalStats,
+    })
+
     set({
       status: 'ended',
-      sessionEndedAt: new Date().toISOString(),
+      sessionEndedAt,
+      stats: finalStats,
       resultMessage: '训练时间结束，已生成训练报告。',
     })
   },
@@ -239,4 +272,40 @@ function recordAction(
     reactionSamplesMs,
     perSecondActions,
   }
+}
+
+function finalizeReportStats(stats: GameStats, board: Board): GameStats {
+  const flagStats = countFinalFlags(board.flat())
+  const finalStats = {
+    ...stats,
+    flagsPlaced: flagStats.totalFlags,
+    correctFlags: flagStats.correctFlags,
+    wrongFlags: flagStats.wrongFlags,
+    mistakes: stats.losses + flagStats.wrongFlags,
+  }
+  finalStats.score = calculateScore(finalStats)
+  return finalStats
+}
+
+function countFinalFlags(cells: Cell[]) {
+  return cells.reduce(
+    (result, cell) => {
+      if (!cell.isFlagged) {
+        return result
+      }
+
+      result.totalFlags += 1
+      if (cell.isMine) {
+        result.correctFlags += 1
+      } else {
+        result.wrongFlags += 1
+      }
+      return result
+    },
+    {
+      totalFlags: 0,
+      correctFlags: 0,
+      wrongFlags: 0,
+    },
+  )
 }
